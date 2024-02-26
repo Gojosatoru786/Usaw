@@ -1,65 +1,39 @@
-const axios = require("axios");
-
+const axios = require('axios');
 module.exports = {
-	config: {
-		name: "videofb",
-		version: "1.3",
-		author: "NTKhang & Mohammad Alamin",
-		countDown: 5,
-		role: 0,
-		shortDescription: {
-			vi: "Tải video từ facebook",
-			en: "Download video from facebook"
-		},
-		longDescription: {
-			vi: "Tải video/story từ facebook (công khai)",
-			en: "Download video/story from facebook (public)"
-		},
-		category: "media",
-		guide: {
-			vi: "   {pn} <url video/story>: tải video từ facebook",
-			en: "   {pn} <url video/story>: download video from facebook"
-		}
-	},
+  config: {
+    name: "videofb",
+    version: "1.0",
+    author: "rehat--",
+    countDown: 15,
+    role: 0,
+    longDescription: "Download facebook video.",
+    category: "media",
+    guide: {
+      en:"{pn} link"
+    }
+  },
 
-	langs: {
-		vi: {
-			missingUrl: "Vui lòng nhập url video/story facebook (công khai) bạn muốn tải về",
-			error: "Đã xảy ra lỗi khi tải video",
-			downloading: "Đang tiến hành tải video cho bạn",
-			tooLarge: "Rất tiếc không thể tải video cho bạn vì dung lượng lớn hơn 83MB"
-		},
-		en: {
-			missingUrl: "Please enter the facebook video/story (public) url you want to download",
-			error: "An error occurred while downloading the video",
-			downloading: "Downloading video for you",
-			tooLarge: "Sorry, we can't download the video for you because the size is larger than 83MB"
-		}
-	},
+  onStart: async function ({ message, args }) {
+    const link = args.join(" ");
+    if (!link)
+      return message.reply(`Please provide the link to the facebook video.`);
+    else {
+      const BASE_URL = `https://turtle-apis.onrender.com/api/videofb?url=${encodeURIComponent(link)}`;
 
-	onStart: async function ({ args, message, getLang }) {
-		if (!args[0]) {
-			return message.reply(getLang("missingUrl"));
-		}
+      message.reply("⬇ | Downloading the video for you");
 
-		let msgSend = null;
-		try {
-			const response = await axios.get(`https://toxinum.xyz/api/v1/videofb?url=${args[0]}`);
+      try {
+        let res = await axios.get(BASE_URL);
+        let videoUrl = res.data.hd;
 
-			if (response.data.success === false) {
-				return message.reply(getLang("error"));
-			}
+        const response = {
+          attachment: await global.utils.getStreamFromURL(videoUrl)
+        };
 
-			msgSend = message.reply(getLang("downloading"));
-
-			const stream = await global.utils.getStreamFromURL(response.data.url2); //url2 is for high quality videos & url1 is for low quality videos
-			await message.reply({ attachment: stream });
-
-			message.unsend((await msgSend).messageID);
-		}
-		catch (e) {
-			message.unsend((await msgSend).messageID);
-			return message.reply(getLang("tooLarge"));
-		}
-	}
+        await message.reply(response);
+      } catch (e) {
+        message.reply(`Sorry, the Facebook video could not be downloaded.`);
+      }
+    }
+  }
 };

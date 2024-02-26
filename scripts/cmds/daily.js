@@ -7,25 +7,17 @@ module.exports = {
 		author: "NTKhang",
 		countDown: 5,
 		role: 0,
-		shortDescription: {
-			vi: "Nhận quà hàng ngày",
-			en: "Receive daily gift"
-		},
-		longDescription: {
-			vi: "Nhận quà hàng ngày",
-			en: "Receive daily gift"
-		},
+		shortDescription: "",
+		longDescription: "",
 		category: "game",
 		guide: {
-			vi: "   {pn}: Nhận quà hàng ngày"
-				+ "\n   {pn} info: Xem thông tin quà hàng ngày",
 			en: "   {pn}"
 				+ "\n   {pn} info: View daily gift information"
 		},
 		envConfig: {
 			rewardFirstDay: {
 				coin: 100,
-				exp: 10
+				exp: 1000
 			}
 		}
 	},

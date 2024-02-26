@@ -1,7 +1,7 @@
 const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
-const qs = require("qs");
+const cheerio = require("cheerio");
 const https = require("https");
 const agent = new https.Agent({
 	rejectUnauthorized: false
@@ -211,6 +211,15 @@ function enableStderrClearLine(isEnable = true) {
 	process.stderr.clearLine = isEnable ? defaultStderrClearLine : () => { };
 }
 
+function formatNumber(number) {
+	const regionCode = global.GoatBot.config.language;
+	if (isNaN(number))
+		throw new Error('The first argument (number) must be a number');
+
+	number = Number(number);
+	return number.toLocaleString(regionCode || "en-US");
+}
+
 function getExtFromAttachmentType(type) {
 	switch (type) {
 		case "photo":
@@ -250,6 +259,7 @@ function getPrefix(threadID) {
 }
 
 function getTime(timestamps, format) {
+	// check if just have timestamps -> format = timestamps
 	if (!format && typeof timestamps == 'string') {
 		format = timestamps;
 		timestamps = undefined;
@@ -422,16 +432,14 @@ function splitPage(arr, limit) {
 	};
 }
 
-function translateAPI(text, lang) {
-	return new Promise((resolve, reject) => {
-		axios.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`)
-			.then(res => {
-				resolve(res.data[0][0][0]);
-			})
-			.catch(err => {
-				reject(err);
-			});
-	});
+async function translateAPI(text, lang) {
+	try {
+		const res = await axios.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`);
+		return res.data[0][0][0];
+	}
+	catch (err) {
+		throw new CustomError(err.response ? err.response.data : err);
+	}
 }
 
 async function downloadFile(url = "", path = "") {
@@ -439,39 +447,50 @@ async function downloadFile(url = "", path = "") {
 		throw new Error(`The first argument (url) must be a string`);
 	if (!path || typeof path !== "string")
 		throw new Error(`The second argument (path) must be a string`);
-	const getFile = await axios.get(url, {
-		responseType: "arraybuffer"
-	});
+	let getFile;
+	try {
+		getFile = await axios.get(url, {
+			responseType: "arraybuffer"
+		});
+	}
+	catch (err) {
+		throw new CustomError(err.response ? err.response.data : err);
+	}
 	fs.writeFileSync(path, Buffer.from(getFile.data));
 	return path;
 }
 
 async function findUid(link) {
-	const response = await axios.post("https://id.traodoisub.com/api.php", qs.stringify({ link }));
-	const uid = response.data.id;
-	if (!uid) {
-		const err = new Error(response.data.error);
-		for (const key in response.data)
-			err[key] = response.data[key];
-		if (err.error == "Vui lòng thao tác chậm lại") {
-			err.name = "SlowDown";
-			err.error = "Please wait a few seconds";
+	try {
+		const response = await axios.post(
+			'https://seomagnifier.com/fbid',
+			new URLSearchParams({
+				'facebook': '1',
+				'sitelink': link
+			}),
+			{
+				headers: {
+					'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+					'Cookie': 'PHPSESSID=0d8feddd151431cf35ccb0522b056dc6'
+				}
+			}
+		);
+		const id = response.data;
+		// try another method if this one fails
+		if (isNaN(id)) {
+			const html = await axios.get(link);
+			const $ = cheerio.load(html.data);
+			const el = $('meta[property="al:android:url"]').attr('content');
+			if (!el) {
+				throw new Error('UID not found');
+			}
+			const number = el.split('/').pop();
+			return number;
 		}
-		else if (err.error == "Vui lòng nhập đúng link facebook") {
-			err.name = "InvalidLink";
-			err.error = "Please enter the correct facebook link";
-		}
-		else if (err.error == "Không thể lấy được dữ liệu vui lòng báo admin!!!") {
-			err.name = "CannotGetData";
-			err.error = "Unable to get data, please report to admin!!!";
-		}
-		else if (err.error == "Link không tồn tại hoặc chưa để chế độ công khai!") {
-			err.name = "LinkNotExist";
-			err.error = "Link does not exist or is not set to public!";
-		}
-		throw err;
+		return id;
+	} catch (error) {
+		throw new Error('An unexpected error occurred. Please try again.');
 	}
-	return uid;
 }
 
 async function getStreamsFromAttachment(attachments) {
@@ -1010,10 +1029,12 @@ const utils = {
 	createQueue,
 	defaultStderrClearLine,
 	enableStderrClearLine,
+	formatNumber,
 	getExtFromAttachmentType,
 	getExtFromMimeType,
 	getExtFromUrl,
 	getPrefix,
+	getText: require("./languages/makeFuncGetLangs.js"),
 	getTime,
 	isHexColor,
 	isNumber,
@@ -1027,7 +1048,6 @@ const utils = {
 	removeHomeDir,
 	splitPage,
 	translateAPI,
-
 	// async functions
 	downloadFile,
 	findUid,
